@@ -13,12 +13,14 @@ int main(int argc, char **argv)
     if (argc != 3)
     {
         cout << "Usage: ./stereo <left_img> <right_img>" << endl;
+        return -1;
     }
     Mat img_l = imread(argv[1]);
     Mat img_r = imread(argv[2]);
     if (img_l.data == NULL || img_r.data == NULL)
     {
         cout << "No images" << endl;
+        return -1;
     }
     
     // 内参

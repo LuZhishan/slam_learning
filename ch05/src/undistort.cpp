@@ -8,11 +8,13 @@ int main(int argc, char **argv)
     if (argc != 2)  
     {
         cout << "Usage: ./undistort <img>" << endl;
+        return -1;
     }
     Mat img_in = imread(argv[1], 0);
     if (img_in.data == NULL)
     {
         cout << "No such img" << endl;
+        return -1;
     }
     
     // 畸变参数
