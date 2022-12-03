@@ -49,10 +49,10 @@ public:
     {
         const CurveFittingVertex *v = static_cast<const CurveFittingVertex *> (_vertices[0]);
         const Eigen::Vector3d abc = v->estimate();
-        _error(0, 0) = _measurement - std::exp(abc(0, 0) * _x * _x + abc(1, 0) * _x + abc(2, 0));
+        _error(0, 0) = _measurement - std::exp(abc(0, 0) * _x * _x + abc(1, 0) * _x + abc(2, 0)); // 误差就是观测值减估计值
     }
 
-    // 计算雅可比矩阵
+    // 计算雅可比矩阵，雅可比矩阵就是输出参数y对三个输入参数的偏导数
     virtual void linearizeOplus() override 
     {
         const CurveFittingVertex *v = static_cast<const CurveFittingVertex *> (_vertices[0]);
