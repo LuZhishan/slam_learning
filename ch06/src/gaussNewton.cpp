@@ -24,17 +24,50 @@ int main()
     }
     
     int iterations = 100;
-    double cast = 0, lastcast = 0;
-    for (size_t i = 0; i < N; i++)
+    double cost = 0, lastcost = 0;
+    for (size_t it = 0; it < iterations; it++)
     {
-        double error = y_data[i] - exp(ae*x_data[i]*x_data[i] + be*x_data[i] + ce);
-        Vector3d J;// 雅可比矩阵
-        J[0] = 
+        Matrix3d H = Matrix3d::Zero();             // Hessian = J^T W^{-1} J in Gauss-Newton
+        Vector3d b = Vector3d::Zero();             // bias
+        cost = 0;
+
+        for (size_t i = 0; i < N; i++)
+        {
+            double xi = x_data[i], yi = y_data[i];  // 第i个数据点
+            double error = yi - exp(ae * xi * xi + be * xi + ce);
+            Vector3d J; // 雅可比矩阵
+            J[0] = -xi * xi * exp(ae * xi * xi + be * xi + ce);  // de/da
+            J[1] = -xi * exp(ae * xi * xi + be * xi + ce);  // de/db
+            J[2] = -exp(ae * xi * xi + be * xi + ce);  // de/dc
+
+            H += inv_sigma * inv_sigma * J * J.transpose();
+            b += -inv_sigma * inv_sigma * error * J;
+
+            cost += error * error;
+        }
+
+        // 求解线性方程 Hx=b
+        Vector3d dx = H.ldlt().solve(b);
+        if (isnan(dx[0])) 
+        {
+            cout << "result is nan!" << endl;
+            break;
+        }
+
+        if (it > 0 && cost >= lastcost) 
+        {
+            cout << "cost: " << cost << ">= last cost: " << lastcost << ", break." << endl;
+            break;
+        }
+
+        ae += dx[0];
+        be += dx[1];
+        ce += dx[2];
+
+        lastcost = cost;
     }
     
 
-
-
-
-
+    cout << "estimated abc = " << ae << ", " << be << ", " << ce << endl;
+    return 0;
 }

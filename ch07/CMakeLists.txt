@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.5)
-project(pose_estimation)
+project(use_g2o)
 
 set(CMAKE_BUILD_TYPE "Release")
 

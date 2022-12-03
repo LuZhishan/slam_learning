@@ -53,7 +53,7 @@ int main(int argc, char **argv)
     Mat disparity_sgbm, disparity;
     sgbm->compute(img_l, img_r, disparity_sgbm);
     disparity_sgbm.convertTo(disparity, CV_32F, 1.0 / 16.0f);
-LINE
+
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr pointcloud(new pcl::PointCloud<pcl::PointXYZRGB>);
     for (size_t v = 0; v < img_l.rows; v++)
     {
@@ -69,14 +69,18 @@ LINE
             point.x = x * depth;
             point.y = y * depth;
             point.z = depth;
-            point.rgb = img_l.at<uchar>(v, u);
+            point.b = img_l.at<Vec3b>(v, u)[0];
+            point.g = img_l.at<Vec3b>(v, u)[1];
+            point.r = img_l.at<Vec3b>(v, u)[2];
 
             pointcloud->push_back(point);
         }
     }
-LINE
+    imshow("disparity", disparity / 96);
+    waitKey(0);
+    
     pcl::visualization::PCLVisualizer viewer("Title of Windows");
-    pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZRGB> color_of_point(pointcloud, 255, 0, 0);
+    pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZRGB> color_of_point(pointcloud);
     viewer.addPointCloud(pointcloud, color_of_point, "ID");
     viewer.spin();
     return 0;
