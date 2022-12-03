@@ -10,7 +10,7 @@ include_directories(
     ${OPENCV_INCLUDE_DIR}
 )
 
-add_executable(gaussNewton src/gaussNewton.cpp)
-target_link_libraries(gaussNewton ${OpenCV_LIBRARIES})
-add_executable(g2o src/g2o.cpp)
-target_link_libraries(g2o ${OpenCV_LIBRARIES})
+add_executable(orb src/orb.cpp)
+target_link_libraries(orb ${OpenCV_LIBRARIES})
+# add_executable(g2o src/g2o.cpp)
+# target_link_libraries(g2o ${OpenCV_LIBRARIES})
