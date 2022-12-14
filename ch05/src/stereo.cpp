@@ -1,5 +1,4 @@
 #include <opencv2/opencv.hpp>
-// 调用PCL进行可视化
 #include <pcl/point_types.h>
 #include <pcl/visualization/pcl_visualizer.h>
 
@@ -22,7 +21,10 @@ int main(int argc, char **argv)
         cout << "No images" << endl;
         return -1;
     }
-    
+    Mat img_lg, img_rg;
+    cvtColor(img_l, img_lg, COLOR_BGR2GRAY);
+    cvtColor(img_r, img_rg, COLOR_BGR2GRAY);
+
     // 内参
     double fx = 718.856, fy = 718.856, cx = 607.1928, cy = 185.2157;
     // 基线
@@ -31,7 +33,7 @@ int main(int argc, char **argv)
     cv::Ptr<StereoSGBM> sgbm = StereoSGBM::create(0, 96, 9,
                                                   8 * 9 * 9, 32 * 9 * 9, 1,
                                                   63, 10, 
-                                                  100, 2);
+                                                  100, 32);
     // CV_WRAP static Ptr<StereoSGBM> create(int minDisparity = 0, int numDisparities = 16, int blockSize = 3,
     //                                     int P1 = 0, int P2 = 0, int disp12MaxDiff = 0,
     //                                     int preFilterCap = 0, int uniquenessRatio = 0,
@@ -51,13 +53,13 @@ int main(int argc, char **argv)
     // mode             #搜索方向
 
     Mat disparity_sgbm, disparity;
-    sgbm->compute(img_l, img_r, disparity_sgbm);
+    sgbm->compute(img_lg, img_rg, disparity_sgbm);
     disparity_sgbm.convertTo(disparity, CV_32F, 1.0 / 16.0f);
 
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr pointcloud(new pcl::PointCloud<pcl::PointXYZRGB>);
     for (size_t v = 0; v < img_l.rows; v++)
     {
-        for (size_t u = 0; u < img_l.rows; u++)
+        for (size_t u = 0; u < img_l.cols; u++)
         {
             if (disparity.at<float>(v, u) <= 0.0 || disparity.at<float>(v, u) >= 96.0) 
                 continue;

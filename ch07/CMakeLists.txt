@@ -12,5 +12,5 @@ include_directories(
 
 add_executable(orb src/orb.cpp)
 target_link_libraries(orb ${OpenCV_LIBRARIES})
-# add_executable(g2o src/g2o.cpp)
-# target_link_libraries(g2o ${OpenCV_LIBRARIES})
+add_executable(pose_estimate_2d2d src/pose_estimate_2d2d.cpp)
+target_link_libraries(pose_estimate_2d2d ${OpenCV_LIBRARIES})
