@@ -9,7 +9,7 @@ struct CURVE_FITTING_COST
     CURVE_FITTING_COST(double x, double y): _x(x), _y(y) {} 
 
     template<typename T>
-    bool operator()(const T *const abc, T *residual) const    // 输入参数的维度由构造过程指定 
+    bool operator()(const T *const abc, T *residual) const  // 括号里面的是待优化变量abc，abc的维度由构造函数指定
     {
         residual[0] = T(_y) - ceres::exp(abc[0] * T(_x) * T(_x) + abc[1] * T(_x) + abc[2]);
         return true;
@@ -43,7 +43,8 @@ int main()
     for (size_t i = 0; i < N; i++)
     {
         problem.AddResidualBlock(
-            new ceres::AutoDiffCostFunction<CURVE_FITTING_COST, 1, 3>(new CURVE_FITTING_COST(x_data[i], y_data[i])),
+            new ceres::AutoDiffCostFunction<CURVE_FITTING_COST, 1, 3>( // 这里的1，3指定了“输出”、“输入”变量的维度（先输出后输入）
+                new CURVE_FITTING_COST(x_data[i], y_data[i])),
             nullptr,// 核函数
             abc     // 待估计参数
         );

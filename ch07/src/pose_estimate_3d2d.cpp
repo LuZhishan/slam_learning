@@ -1,5 +1,6 @@
-#include <opencv2/opencv.hpp>
 #include <Eigen/Core>
+#include <opencv2/opencv.hpp>
+#include <opencv2/core/eigen.hpp>   // eigen必须在opencv前面
 #include <sophus/se3.hpp>
 #include <g2o/core/block_solver.h>
 #include <g2o/core/base_vertex.h>
@@ -116,7 +117,8 @@ void bundleAdjustmentG2O(
   const vector<Eigen::Vector3d> &points_3d,
   const vector<Eigen::Vector2d> &points_2d,
   const Mat &K,
-  Sophus::SE3d &pose) 
+  Sophus::SE3d &pose_in,
+  Sophus::SE3d &pose_out) 
 {
     // 构建图优化，先设定g2o
     // 这里的6，2是这样：6是待优化的变量的维度SE3的维度，2的误差的维度，
@@ -132,7 +134,7 @@ void bundleAdjustmentG2O(
     // vertex
     VertexPose *vertex_pose = new VertexPose(); // camera vertex_pose
     vertex_pose->setId(0);
-    vertex_pose->setEstimate(Sophus::SE3d());
+    vertex_pose->setEstimate(pose_in);
     optimizer.addVertex(vertex_pose);
 
     // K
@@ -164,7 +166,7 @@ void bundleAdjustmentG2O(
     chrono::duration<double> time_used = chrono::duration_cast<chrono::duration<double>>(t2 - t1);
     cout << "optimization costs time: " << time_used.count() << " seconds." << endl;
     cout << "pose estimated by g2o =\n" << vertex_pose->estimate().matrix() << endl;
-    pose = vertex_pose->estimate();
+    pose_out = vertex_pose->estimate();
 }
 
 
@@ -210,7 +212,12 @@ int main(int argc, char **argv)
     solvePnP(pts_3d, pts_2d, K, Mat(), r, t, false);
     Mat R;
     cv::Rodrigues(r, R); // r为旋转向量形式，用Rodrigues公式转换为矩阵
+    cout << R << endl;
 
+    Eigen::MatrixXd R_e(R.rows, R.cols);// 根据Mat的尺寸构建Matrix
+    Eigen::MatrixXd t_e(t.rows, t.cols);
+    cv2eigen(R, R_e);                   // 将Mat转换成Matrix
+    cv2eigen(t, t_e);
 
     vector<Eigen::Vector3d> pts_3d_eigen;
     vector<Eigen::Vector2d> pts_2d_eigen;
@@ -220,7 +227,11 @@ int main(int argc, char **argv)
         pts_2d_eigen.push_back(Eigen::Vector2d(pts_2d[i].x, pts_2d[i].y));
     }
 
+    Sophus::SE3d pose_pnp(R_e, t_e);
+    Eigen::AngleAxisd r0(0.0, Eigen::Vector3d(0, 0, 1)); Eigen::Vector3d t0(0,0,0);
+    Sophus::SE3d pose_0(r0.toRotationMatrix(), t0);
     Sophus::SE3d pose_g2o;
-    bundleAdjustmentG2O(pts_3d_eigen, pts_2d_eigen, K, pose_g2o);
+    bundleAdjustmentG2O(pts_3d_eigen, pts_2d_eigen, K, pose_0, pose_g2o);   // 从零开始所需时间是从pnp开始的两倍
+    bundleAdjustmentG2O(pts_3d_eigen, pts_2d_eigen, K, pose_pnp, pose_g2o);
 
 }
