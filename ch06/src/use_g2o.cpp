@@ -100,7 +100,7 @@ int main()
 
     // 往图中增加顶点
     CurveFittingVertex *v = new CurveFittingVertex();
-    v->setEstimate(Eigen::Vector3d(ae, be, ce));
+    v->setEstimate(Eigen::Vector3d(ae, be, ce));// 将待优化变量的初始值当作顶点
     v->setId(0);
     optimizer.addVertex(v);
 
