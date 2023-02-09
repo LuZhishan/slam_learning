@@ -2,11 +2,15 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/core/eigen.hpp>   // eigen必须在opencv前面
 #include <sophus/se3.hpp>
+
 #include <g2o/core/block_solver.h>
 #include <g2o/core/base_vertex.h>
 #include <g2o/core/base_unary_edge.h>
 #include <g2o/core/optimization_algorithm_gauss_newton.h>
 #include <g2o/solvers/dense/linear_solver_dense.h>
+
+#include <ceres/ceres.h>
+#include <ceres/rotation.h>
 
 using namespace cv;
 using namespace std;
@@ -52,7 +56,7 @@ Point2d pixel2cam(const Point2d &p, const Mat &K)
 }
 
 
-/// vertex and edges used in g2o ba
+// vertex and edges used in g2o ba
 class VertexPose : public g2o::BaseVertex<6, Sophus::SE3d> 
 {
 public:
@@ -114,11 +118,11 @@ private:
 };
 
 void bundleAdjustmentG2O(
-  const vector<Eigen::Vector3d> &points_3d,
-  const vector<Eigen::Vector2d> &points_2d,
-  const Mat &K,
-  Sophus::SE3d &pose_in,
-  Sophus::SE3d &pose_out) 
+    const vector<Eigen::Vector3d> &points_3d,
+    const vector<Eigen::Vector2d> &points_2d,
+    const Mat &K,
+    Sophus::SE3d &pose_in,
+    Sophus::SE3d &pose_out) 
 {
     // 构建图优化，先设定g2o
     // 这里的6，2是这样：6是待优化的变量的维度SE3的维度，2的误差的维度，
@@ -170,7 +174,71 @@ void bundleAdjustmentG2O(
 }
 
 
+// pnp class used in ceres ba
+struct pnpCeres
+{
+private:
+    cv::Point2d pt2d_;
+    cv::Point3d pt3d_;
+    cv::Mat K_cam_;
 
+public:
+    // 构造函数，传入相机内参和待优化的点数据
+    pnpCeres(cv::Point2d pt2d, cv::Point3d pt3d, cv::Mat K): pt3d_(pt3d), pt2d_(pt2d), K_cam_(K) {}
+
+    template<typename T>
+    bool operator()(const T* const pose6d, T* residual) const { // pose6d是待优化变量
+        T proj_pt2d[3];
+        T proj_pt3d[3];
+        proj_pt3d[0] = T(pt3d_.x);
+        proj_pt3d[1] = T(pt3d_.y);
+        proj_pt3d[2] = T(pt3d_.z);
+        ceres::AngleAxisRotatePoint(pose6d, proj_pt3d, proj_pt2d);
+        proj_pt2d[0] += pose6d[3];
+        proj_pt2d[1] += pose6d[4];
+        proj_pt2d[2] += pose6d[5];
+        proj_pt2d[0] /= proj_pt2d[2];
+        proj_pt2d[1] /= proj_pt2d[2];
+        proj_pt2d[2] = T(1.0);
+
+        residual[0] = proj_pt2d[0] * K_cam_.at<double>(0,0) + K_cam_.at<double>(0,2) - T(pt2d_.x);
+        residual[1] = proj_pt2d[1] * K_cam_.at<double>(1,1) + K_cam_.at<double>(1,2) - T(pt2d_.y);
+
+        return true;
+    }
+
+    static ceres::CostFunction* CreateCostFunction(const cv::Point2d pt2d, const cv::Point3d pt3d, const cv::Mat K){
+        return (new ceres::AutoDiffCostFunction<pnpCeres, 2, 6>(// 2是输出误差的维度，6是待优化的维度
+            new pnpCeres(pt2d, pt3d, K)));
+    }
+};
+
+void bundleAdjustmentCeres(
+    std::vector<cv::Point2d> pt2ds, 
+    std::vector<cv::Point3d> pt3ds, 
+    cv::Mat K, 
+    double* init_pose6d)
+{
+    // create ceres problem for motion BA
+    ceres::Problem problem;
+    for (size_t i = 0; i < pt2ds.size(); i++)
+    {
+        ceres::LossFunction* loss = new ceres::HuberLoss(0.5);  // 核函数
+        problem.AddResidualBlock(pnpCeres::CreateCostFunction(pt2ds[i], pt3ds[i], K), loss, init_pose6d);
+    }
+   
+    // set ceres solver
+    ceres::Solver::Options options;
+    ceres::Solver::Summary summary;
+    options.linear_solver_type = ceres::DENSE_SCHUR;
+    options.minimizer_progress_to_stdout = true;
+    options.max_num_iterations = 30;
+
+    // solve the BA problem
+    ceres::Solve(options, &problem, &summary);
+    std::cout<< summary.BriefReport() <<std::endl;  
+    
+}
 
 
 
@@ -193,8 +261,8 @@ int main(int argc, char **argv)
     vector<DMatch> matches;
     find_feature_matches(img_1, img_2, kp1, kp2, matches);
 
-    vector<Point3f> pts_3d;
-    vector<Point2f> pts_2d;
+    vector<Point3d> pts_3d;
+    vector<Point2d> pts_2d;
     Mat K = (Mat_<double>(3, 3) << 520.9, 0, 325.1, 0, 521.0, 249.7, 0, 0, 1);
 
     for (DMatch m:matches) 
@@ -231,7 +299,16 @@ int main(int argc, char **argv)
     Eigen::AngleAxisd r0(0.0, Eigen::Vector3d(0, 0, 1)); Eigen::Vector3d t0(0,0,0);
     Sophus::SE3d pose_0(r0.toRotationMatrix(), t0);
     Sophus::SE3d pose_g2o;
-    bundleAdjustmentG2O(pts_3d_eigen, pts_2d_eigen, K, pose_0, pose_g2o);   // 从零开始所需时间是从pnp开始的两倍
-    bundleAdjustmentG2O(pts_3d_eigen, pts_2d_eigen, K, pose_pnp, pose_g2o);
+    // 无论从谁开始，精度相当，当然也有可能是因为Rt本来就很小
+    // 而且即使不进行优化，只有pnp精度也差不多。
+    bundleAdjustmentG2O(pts_3d_eigen, pts_2d_eigen, K, pose_0, pose_g2o);   // 从零开始所需时间0.466712ms
+    bundleAdjustmentG2O(pts_3d_eigen, pts_2d_eigen, K, pose_pnp, pose_g2o); // 从pnp开始所需时间0.223972ms
+    double pose[6] = {0,0,0,0,0,0}; // 这个pose既是输入的初始值，也是最后输出值
+    bundleAdjustmentCeres(pts_2d, pts_3d, K, pose);
+    for (size_t i = 0; i < 6; i++)
+    {
+        cout << pose[i] << endl;
+    }
 
+    return 0;
 }
